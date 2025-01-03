@@ -25,6 +25,7 @@ from rich.live import Live
 from rich.panel import Panel
 from rich.progress import BarColumn, Progress, SpinnerColumn, TextColumn, TimeElapsedColumn
 from typer import Exit, Option
+from security import safe_command
 
 with warnings.catch_warnings():
     warnings.simplefilter("ignore", category=FutureWarning)
@@ -138,7 +139,7 @@ def get_free_gpu():
 def run_subprocess(cmd: List[str], verbose: bool = False, show_errors: bool = False):
     stdout = None if verbose else subprocess.DEVNULL
     stderr = None if verbose or show_errors else subprocess.DEVNULL
-    process = subprocess.Popen(cmd, stdout=stdout, stderr=stderr)
+    process = safe_command.run(subprocess.Popen, cmd, stdout=stdout, stderr=stderr)
     all_processes.append(process)  # Add the process to the global list
     process.wait()
 
