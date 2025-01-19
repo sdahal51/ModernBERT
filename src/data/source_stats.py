@@ -41,79 +41,79 @@ def main(out_fn, dataset_max_size):
     tokens_for_source = []
     current_repos_to_do = [item for item in ALL_REPOS if item.split("/")[-1] not in cached_sources]
     prev_src = current_repos_to_do[0].split("/")[-1]
-    percentiles_out = open(percentiles_out_path, "a")
+    with open(percentiles_out_path, "a") as percentiles_out:
 
-    for data_dir in tqdm.tqdm(current_repos_to_do):
-        source = data_dir.split("/")[-1]
-        print(f"Processing {source}... with data_dir {data_dir}")
-        if source != prev_src:
-            # add percentiles and reset
-            tokens_np = np.array(tokens_for_source)
-            percentile_stats_all = np.percentile(tokens_np, percentiles)
-            percentile_stats = {
-                "mean": np.mean(tokens_np),
-                "std": np.std(tokens_np),
-                "percentiles": {p: v for p, v in zip(percentiles, percentile_stats_all)}
-            }
-            tokens_for_source = []
-            percentiles_out.write(json.dumps({prev_src: percentile_stats, "source": prev_src}) + "\n")
-            percentiles_out.flush()
+        for data_dir in tqdm.tqdm(current_repos_to_do):
+            source = data_dir.split("/")[-1]
+            print(f"Processing {source}... with data_dir {data_dir}")
+            if source != prev_src:
+                # add percentiles and reset
+                tokens_np = np.array(tokens_for_source)
+                percentile_stats_all = np.percentile(tokens_np, percentiles)
+                percentile_stats = {
+                    "mean": np.mean(tokens_np),
+                    "std": np.std(tokens_np),
+                    "percentiles": {p: v for p, v in zip(percentiles, percentile_stats_all)}
+                }
+                tokens_for_source = []
+                percentiles_out.write(json.dumps({prev_src: percentile_stats, "source": prev_src}) + "\n")
+                percentiles_out.flush()
     
-        prev_src = source
+            prev_src = source
 
-        with tempfile.TemporaryDirectory() as tmp_cache_dir:
-            remote = f'hf://datasets/orionweller/{source}/'
-            token_lens = []
-            pool = []
-            clean_stale_shared_memory()
-            for idx, instance in tqdm.tqdm(enumerate(StreamingDataset(remote=remote, shuffle=False, split=None, batch_size=1, predownload=dataset_max_size))):
-                pool.append(instance)
-                if idx > dataset_max_size:
-                    break
-                if len(pool) > 1000:
-                    hf_dataset = Dataset.from_list(pool)
-                    try:
-                        tokens = hf_dataset.map(
-                            lambda row: {"num_tokens": tokenizer(row["text"]), "batched": True},
-                            num_proc=NUM_PROC, remove_columns=MDS_COLS_TEXT.keys()
-                        )["num_tokens"]
-                    except Exception as e:
-                        print(f"Error processing {source} at idx {idx}")
-                        print(e)
-                        tokens = hf_dataset.map(
-                            lambda row: {"num_tokens": tokenizer(row["text"]), "batched": True},
-                            num_proc=NUM_PROC, remove_columns=MDS_COLS_TEXT.keys()
-                        )["num_tokens"]
-                    token_lens.extend([len(item["input_ids"]) for item in tokens])
-                    hf_dataset.cleanup_cache_files()
-                    pool = []
+            with tempfile.TemporaryDirectory() as tmp_cache_dir:
+                remote = f'hf://datasets/orionweller/{source}/'
+                token_lens = []
+                pool = []
+                clean_stale_shared_memory()
+                for idx, instance in tqdm.tqdm(enumerate(StreamingDataset(remote=remote, shuffle=False, split=None, batch_size=1, predownload=dataset_max_size))):
+                    pool.append(instance)
+                    if idx > dataset_max_size:
+                        break
+                    if len(pool) > 1000:
+                        hf_dataset = Dataset.from_list(pool)
+                        try:
+                            tokens = hf_dataset.map(
+                                lambda row: {"num_tokens": tokenizer(row["text"]), "batched": True},
+                                num_proc=NUM_PROC, remove_columns=MDS_COLS_TEXT.keys()
+                            )["num_tokens"]
+                        except Exception as e:
+                            print(f"Error processing {source} at idx {idx}")
+                            print(e)
+                            tokens = hf_dataset.map(
+                                lambda row: {"num_tokens": tokenizer(row["text"]), "batched": True},
+                                num_proc=NUM_PROC, remove_columns=MDS_COLS_TEXT.keys()
+                            )["num_tokens"]
+                        token_lens.extend([len(item["input_ids"]) for item in tokens])
+                        hf_dataset.cleanup_cache_files()
+                        pool = []
 
-            hf_dataset = Dataset.from_list(pool)
-            tokens = hf_dataset.map(
-                lambda row: {"num_tokens": tokenizer(row["text"]), "batched": True},
-                num_proc=NUM_PROC, remove_columns=MDS_COLS_TEXT.keys()
-            )["num_tokens"]
-            token_lens.extend([len(item["input_ids"]) for item in tokens])
+                hf_dataset = Dataset.from_list(pool)
+                tokens = hf_dataset.map(
+                    lambda row: {"num_tokens": tokenizer(row["text"]), "batched": True},
+                    num_proc=NUM_PROC, remove_columns=MDS_COLS_TEXT.keys()
+                )["num_tokens"]
+                token_lens.extend([len(item["input_ids"]) for item in tokens])
 
-            tokens_for_source.extend(token_lens)
+                tokens_for_source.extend(token_lens)
 
-            # This is overkill, but just in case
-            hf_dataset.cleanup_cache_files()
+                # This is overkill, but just in case
+                hf_dataset.cleanup_cache_files()
 
-            stats.append({
-                "source": source,
-                "num_tokens": sum(token_lens)
-            })
+                stats.append({
+                    "source": source,
+                    "num_tokens": sum(token_lens)
+                })
 
-    # do the percentile calculation for the last source also
-    tokens_np = np.array(tokens_for_source)
-    percentile_stats_all = np.percentile(tokens_np, percentiles)
-    percentile_stats = {
-        "mean": np.mean(tokens_np),
-        "std": np.std(tokens_np),
-        "percentiles": {p: v for p, v in zip(percentiles, percentile_stats_all)}
-    }
-    percentiles_out.write(json.dumps({prev_src: percentile_stats}) + "\n")
+        # do the percentile calculation for the last source also
+        tokens_np = np.array(tokens_for_source)
+        percentile_stats_all = np.percentile(tokens_np, percentiles)
+        percentile_stats = {
+            "mean": np.mean(tokens_np),
+            "std": np.std(tokens_np),
+            "percentiles": {p: v for p, v in zip(percentiles, percentile_stats_all)}
+        }
+        percentiles_out.write(json.dumps({prev_src: percentile_stats}) + "\n")
 
     # now get the total stats
     stats = pd.DataFrame(stats)
