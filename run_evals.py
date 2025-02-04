@@ -2,7 +2,6 @@
 # License: Apache-2.0
 
 import os
-import random
 import re
 import signal
 import subprocess
@@ -25,6 +24,7 @@ from rich.live import Live
 from rich.panel import Panel
 from rich.progress import BarColumn, Progress, SpinnerColumn, TextColumn, TimeElapsedColumn
 from typer import Exit, Option
+import secrets
 
 with warnings.catch_warnings():
     warnings.simplefilter("ignore", category=FutureWarning)
@@ -249,7 +249,7 @@ def manage_jobs(configs: List[Path], verbose: bool = False, delete_eval_yamls: b
                 check_finished_jobs(verbose)
                 gpu_id = get_free_gpu()
                 if gpu_id is not None:
-                    time.sleep(random.randint(0, 5))
+                    time.sleep(secrets.SystemRandom().randint(0, 5))
                     print(f"\nLaunching job for {config} on GPU {gpu_id}\n")
                     run_job(config, gpu_id=gpu_id, verbose=verbose, delete_eval_yamls=delete_eval_yamls)
                     break
@@ -301,7 +301,7 @@ def manage_jobs(configs: List[Path], verbose: bool = False, delete_eval_yamls: b
 
                     gpu_id = get_free_gpu()
                     if gpu_id is not None:
-                        time.sleep(random.randint(0, 5))
+                        time.sleep(secrets.SystemRandom().randint(0, 5))
                         if gpu_id not in gpu_tasks:
                             gpu_tasks[gpu_id] = gpu_progress.add_task(f"[green]GPU {gpu_id}", total=1)
                         else:
